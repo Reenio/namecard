@@ -29,6 +29,13 @@ jobs:
           cd ios
           pod install
 
+      - name: Disable Code Signing Requirements
+        run: |
+          echo "CODE_SIGNING_ALLOWED = NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED = NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY = -" >> ios/Flutter/Release.xcconfig
+          echo "EXPANDED_CODE_SIGN_IDENTITY = -" >> ios/Flutter/Release.xcconfig
+
       - name: Build iOS Application (No Codesign)
         # We build it without code signing so it succeeds without an Apple Developer certificate
         # Note: You still need a paid Apple Developer account to actually install it on an iPhone 
