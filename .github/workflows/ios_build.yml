@@ -29,42 +29,35 @@ jobs:
           cd ios
           pod install
 
-      - name: Force Disable Code Signing in config
+      - name: Patch Xcode project to disable code signing
         run: |
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=-" >> ios/Flutter/Release.xcconfig
+          # Replace any DEVELOPMENT_TEAM assignment with an empty value in the project file
+          # This makes Flutter's own project-file check pass (it won't find a missing team)
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = "";/g' ios/Runner.xcodeproj/project.pbxproj
 
-      - name: Build iOS Application (Raw xcodebuild)
+          # Disable code signing entirely in the project file for all build configurations
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g' ios/Runner.xcodeproj/project.pbxproj
+
+          # Also append overrides to the Release xcconfig
+          echo 'CODE_SIGNING_ALLOWED=NO' >> ios/Flutter/Release.xcconfig
+          echo 'CODE_SIGNING_REQUIRED=NO' >> ios/Flutter/Release.xcconfig
+          echo 'CODE_SIGN_IDENTITY=' >> ios/Flutter/Release.xcconfig
+          echo 'DEVELOPMENT_TEAM=' >> ios/Flutter/Release.xcconfig
+
+      - name: Build iOS Application (No Code Sign)
         run: |
-          # 1. Ask Flutter to build for the Simulator. This forcefully generates all 
-          # Flutter Xcode plugins and Config files without ANY Apple signature checks.
-          flutter build ios --debug --simulator
-
-          # 2. Use Apple's raw build tool to compile an unsigned physical device binary
-          # SYMROOT is set explicitly so we know exactly where the output lands.
-          cd ios
-          xcodebuild clean build \
-            -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -sdk iphoneos \
-            SYMROOT="$(pwd)/../build/ios" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            EXPANDED_CODE_SIGN_IDENTITY="" \
-            COMPILER_INDEX_STORE_ENABLE=NO
+          flutter build ios --release --no-codesign
 
       - name: Compress App to IPA
         run: |
-          # xcodebuild places the .app inside SYMROOT/Release-iphoneos
-          APP_DIR="build/ios/Release-iphoneos"
-          echo "Contents of $APP_DIR:"
-          ls -la "$APP_DIR" || (echo "Directory not found, listing build/ios:" && ls -laR build/ios)
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          echo "App path contents:"
+          ls -la "$APP_PATH" || (echo "Not found there, listing build/ios:" && find build/ios -name "*.app" -type d)
           
           mkdir -p Payload
-          cp -r "$APP_DIR/Runner.app" Payload/
+          cp -r "$APP_PATH" Payload/
           zip -r namecard-unsigned.ipa Payload
           rm -rf Payload
 
@@ -72,4 +65,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: namecard-ios-app
-          path: build/namecard-unsigned.ipa
+          path: namecard-unsigned.ipa
