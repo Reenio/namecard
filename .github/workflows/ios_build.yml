@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   build_ios:
@@ -29,34 +29,23 @@ jobs:
           cd ios
           pod install
 
-      - name: Build iOS Application (Unsigned)
+      - name: Build iOS Application (Unsigned IPA)
         run: |
-          # First ask Flutter to generate all needed project files without building
-          flutter build ios --release --config-only
-          
-          # Then use xcodebuild directly to force an unsigned device build
-          cd ios
-          xcodebuild clean build \
-            -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            EXPANDED_CODE_SIGN_IDENTITY="" \
-            COMPILER_INDEX_STORE_ENABLE=NO
+          # Use flutter's dedicated IPA pipeline but explicitly disable codesigning checks
+          flutter build ipa --release --no-codesign
 
-      - name: Compress App to IPA
+      - name: Extract App and Zip to IPA
         run: |
-          cd build/ios/Release-iphoneos
+          # 'flutter build ipa --no-codesign' creates an .xcarchive instead of a final .ipa
+          # We need to manually extract the .app from it and zip it into our own .ipa file
+          cd build/ios/archive/Runner.xcarchive/Products/Applications
           mkdir Payload
           cp -r Runner.app Payload/
-          zip -r ../../../namecard-ios-app.ipa Payload
+          zip -r ../../../../../namecard.ipa Payload
           rm -rf Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: namecard-ios-app
-          path: namecard-ios-app.ipa
+          path: build/namecard.ipa
