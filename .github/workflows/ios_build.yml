@@ -29,30 +29,34 @@ jobs:
           cd ios
           pod install
 
-      - name: Disable Code Signing Requirements
+      - name: Build iOS Application (Unsigned)
         run: |
-          echo "CODE_SIGNING_ALLOWED = NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED = NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY = -" >> ios/Flutter/Release.xcconfig
-          echo "EXPANDED_CODE_SIGN_IDENTITY = -" >> ios/Flutter/Release.xcconfig
+          # First ask Flutter to generate all needed project files without building
+          flutter build ios --release --config-only
+          
+          # Then use xcodebuild directly to force an unsigned device build
+          cd ios
+          xcodebuild clean build \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
-      - name: Build iOS Application (No Codesign)
-        # We build it without code signing so it succeeds without an Apple Developer certificate
-        # Note: You still need a paid Apple Developer account to actually install it on an iPhone 
-        # unless you sideload it (e.g. using AltStore).
-        run: flutter build ios --release --no-codesign
-
-      # Compresses the resulting .app into an IPA-like zip folder
-      - name: Compress App
+      - name: Compress App to IPA
         run: |
-          cd build/ios/iphoneos
+          cd build/ios/Release-iphoneos
           mkdir Payload
           cp -r Runner.app Payload/
-          zip -r ./app.ipa Payload
+          zip -r ../../../namecard-ios-app.ipa Payload
           rm -rf Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: namecard-ios-app
-          path: build/ios/iphoneos/app.ipa
+          path: namecard-ios-app.ipa
