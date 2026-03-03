@@ -29,23 +29,42 @@ jobs:
           cd ios
           pod install
 
-      - name: Build iOS Application (Unsigned IPA)
+      - name: Force Disable Code Signing in config
         run: |
-          # Use flutter's dedicated IPA pipeline but explicitly disable codesigning checks
-          flutter build ipa --release --no-codesign
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=-" >> ios/Flutter/Release.xcconfig
 
-      - name: Extract App and Zip to IPA
+      - name: Build iOS Application (Raw xcodebuild)
         run: |
-          # 'flutter build ipa --no-codesign' creates an .xcarchive instead of a final .ipa
-          # We need to manually extract the .app from it and zip it into our own .ipa file
-          cd build/ios/archive/Runner.xcarchive/Products/Applications
+          # 1. Ask Flutter to just generate necessary plugins without running the Apple validations
+          flutter build ios --release --config-only
+
+          # 2. Use Apple's raw build tool to forcefully compile an unsigned machine binary
+          cd ios
+          xcodebuild clean build \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Compress App to IPA
+        run: |
+          # 3. Xcode outputs the compiled .app into the derived build folder
+          # We package the .app folder inside a Payload folder to form a valid .ipa file
+          cd build/ios/Release-iphoneos
           mkdir Payload
           cp -r Runner.app Payload/
-          zip -r ../../../../../namecard.ipa Payload
+          zip -r ../../../namecard-unsigned.ipa Payload
           rm -rf Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: namecard-ios-app
-          path: build/namecard.ipa
+          path: build/namecard-unsigned.ipa
