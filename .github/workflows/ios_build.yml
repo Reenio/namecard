@@ -37,8 +37,9 @@ jobs:
 
       - name: Build iOS Application (Raw xcodebuild)
         run: |
-          # 1. Ask Flutter to just generate necessary plugins without running the Apple validations
-          flutter build ios --release --config-only
+          # 1. Ask Flutter to build for the Simulator. This forcefully generates all 
+          # Flutter Xcode plugins and Config files without ANY Apple signature checks.
+          flutter build ios --debug --simulator
 
           # 2. Use Apple's raw build tool to forcefully compile an unsigned machine binary
           cd ios
