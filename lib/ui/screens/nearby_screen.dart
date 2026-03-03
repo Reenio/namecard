@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:namecard/services/nearby_service.dart';
 import 'package:namecard/providers/storage_provider.dart';
 
 // nearby_connections is Android-only. All calls are guarded with Platform.isAndroid.
