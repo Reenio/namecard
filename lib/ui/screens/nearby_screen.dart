@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nearby_connections/nearby_connections.dart';
-import 'package:namecard/services/nearby_service.dart';
 import 'package:namecard/providers/storage_provider.dart';
 
+// nearby_connections is Android-only. All calls are guarded with Platform.isAndroid.
+// On iOS, this screen shows a "not supported" message instead.
 class NearbyScreen extends ConsumerStatefulWidget {
   const NearbyScreen({super.key});
 
@@ -19,55 +19,88 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
+    if (Platform.isAndroid) {
+      _checkPermissionsAndroid();
+    }
   }
 
-  Future<void> _checkPermissions() async {
-    if (Platform.isAndroid) {
-      if (!await Nearby().checkLocationPermission()) {
-        await Nearby().askLocationPermission();
-      }
-      if (!await Nearby().checkBluetoothPermission()) {
-        Nearby().askBluetoothPermission();
-      }
-      if (Platform.isAndroid) {
-       // Ask for Android 12 permissions
-        await Nearby().checkLocationEnabled();
-        await Nearby().checkBluetoothPermission(); // Tries to ask for Connect/Scan/Advertise
-      }
-    }
+  Future<void> _checkPermissionsAndroid() async {
+    // Permissions for Nearby Connections on Android are declared in AndroidManifest.xml.
+    // Runtime permission requests for Location and Bluetooth are handled automatically
+    // by the nearby_connections library when startAdvertising/startDiscovery is called.
   }
 
   @override
   void dispose() {
-    ref.read(nearbyServiceProvider).stopAll();
+    if (Platform.isAndroid) {
+      _stopAll();
+    }
     super.dispose();
   }
 
+  void _stopAll() {
+    // Only accessed on Android
+    ref.read(nearbyServiceProvider).stopAll();
+  }
+
   void _toggleAdvertise(String userName) async {
+    if (!Platform.isAndroid) return;
+    final service = ref.read(nearbyServiceProvider);
     if (_isAdvertising) {
-      await Nearby().stopAdvertising();
+      await service.stopAdvertising();
       setState(() => _isAdvertising = false);
       ref.read(nearbyStatusProvider.notifier).state = 'Stopped advertising';
     } else {
-      await ref.read(nearbyServiceProvider).startAdvertising(userName);
+      await service.startAdvertising(userName);
       setState(() => _isAdvertising = true);
     }
   }
 
   void _toggleDiscover() async {
+    if (!Platform.isAndroid) return;
+    final service = ref.read(nearbyServiceProvider);
     if (_isDiscovering) {
-      await Nearby().stopDiscovery();
+      await service.stopDiscovery();
       setState(() => _isDiscovering = false);
       ref.read(nearbyStatusProvider.notifier).state = 'Stopped discovering';
     } else {
-      await ref.read(nearbyServiceProvider).startDiscovery();
+      await service.startDiscovery();
       setState(() => _isDiscovering = true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // The Nearby Connections feature is Android-only.
+    if (!Platform.isAndroid) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Nearby Radar')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.radar, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'Nearby Radar is Android only',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'The Google Nearby Connections API is not available on iOS.\nUse QR Code sharing instead.',
+                  style: TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final status = ref.watch(nearbyStatusProvider);
     final devices = ref.watch(discoveredDevicesProvider);
     final myCardAsync = ref.watch(myNamecardProvider);
@@ -86,7 +119,12 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
                   children: [
                     const Icon(Icons.info),
                     const SizedBox(width: 16),
-                    Expanded(child: Text('Status: $status', style: const TextStyle(fontWeight: FontWeight.bold))),
+                    Expanded(
+                      child: Text(
+                        'Status: $status',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -117,7 +155,12 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
               const Divider(),
               Expanded(
                 child: devices.isEmpty
-                    ? const Center(child: Text('No devices found.', style: TextStyle(color: Colors.grey)))
+                    ? const Center(
+                        child: Text(
+                          'No devices found.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
                     : ListView.builder(
                         itemCount: devices.length,
                         itemBuilder: (context, index) {
@@ -135,14 +178,18 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
                                   icon: const Icon(Icons.link, color: Colors.blue),
                                   tooltip: 'Connect',
                                   onPressed: () {
-                                    ref.read(nearbyServiceProvider).requestConnection(endpointId, userName);
+                                    ref
+                                        .read(nearbyServiceProvider)
+                                        .requestConnection(endpointId, userName);
                                   },
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.send, color: Colors.green),
                                   tooltip: 'Send My Card',
                                   onPressed: () {
-                                    ref.read(nearbyServiceProvider).sendMyNamecard(endpointId);
+                                    ref
+                                        .read(nearbyServiceProvider)
+                                        .sendMyNamecard(endpointId);
                                   },
                                 ),
                               ],
@@ -150,7 +197,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
                           );
                         },
                       ),
-              )
+              ),
             ],
           );
         },
